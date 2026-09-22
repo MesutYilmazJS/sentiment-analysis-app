@@ -29,6 +29,7 @@ SentiPulse, herhangi bir arka plan (backend) sunucusuna ihtiyaç duymadan **%100
   - Şaşkınlık (Surprise)
   - Tiksinme (Disgust)
   - Nötr / Tarafsız (Neutral)
+- 🎙️ **Sesli Girdi (Web Speech API):** Mikrofona basarak konuşun, Türkçe konuşmanız anında metne dökülsün (`tr-TR`).
 - ⏱️ **Milisaniye Cinsinden Canlı Performans Ölçümü:** Analizlerin kaç `ms` içinde tamamlandığını canlı ölçer.
 - 🕒 **Oturum Geçmişi (Session History):** Gerçekleştirilen analizleri oturum boyunca hafızada tutar ve tek tıkla eski sonuçlara dönmenizi sağlar.
 - 📋 **Tek Tıkla Kopyalama:** Analiz sonuç özetlerini panoya kopyalama özelliği.

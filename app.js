@@ -1,5 +1,5 @@
 /**
- * SentiPulse - 5 Seviyeli Duygu & Psikolojik Analiz Stüdyosu
+ * SentiPulse - 5 Seviyeli Duygu, Psikolojik Analiz & Türkçe Sesli Girdi Stüdyosu
  * Vanilla JS OOP Mimarisi
  */
 
@@ -14,6 +14,10 @@ class SentimentApp {
         this.modelName = 'Xenova/bert-base-multilingual-uncased-sentiment';
         this.history = [];
 
+        // Web Speech API nesnesi
+        this.recognition = null;
+        this.isListening = false;
+
         // DOM Element Referansları
         this.elements = {
             inputText: document.getElementById('inputText'),
@@ -21,6 +25,12 @@ class SentimentApp {
             clearBtn: document.getElementById('clearBtn'),
             pasteBtn: document.getElementById('pasteBtn'),
             charCounter: document.getElementById('charCounter'),
+
+            // Voice Speech Elements
+            micBtn: document.getElementById('micBtn'),
+            micIcon: document.getElementById('micIcon'),
+            micBtnText: document.getElementById('micBtnText'),
+            listeningStatus: document.getElementById('listeningStatus'),
 
             // Status
             statusContainer: document.getElementById('statusContainer'),
@@ -63,8 +73,9 @@ class SentimentApp {
 
     init() {
         this.bindEvents();
+        this.initSpeechRecognition();
         this.updateCharCounter();
-        console.log('🚀 SentiPulse Dual-Engine AI (5-Level & Emotion AI) Hazır.');
+        console.log('🚀 SentiPulse Studio (5-Level, Emotion & Voice AI Engine) Hazır.');
     }
 
     bindEvents() {
@@ -99,6 +110,11 @@ class SentimentApp {
             }
         });
 
+        // Mikrofon Butonu Olay Dinleyicisi
+        if (this.elements.micBtn) {
+            this.elements.micBtn.addEventListener('click', () => this.toggleSpeechRecognition());
+        }
+
         // Örnek Çipler
         this.elements.exampleChips.forEach((chip) => {
             chip.addEventListener('click', (e) => {
@@ -119,6 +135,104 @@ class SentimentApp {
             this.history = [];
             this.renderHistory();
         });
+    }
+
+    /**
+     * Web Speech API (Türkçe Ses Tanıma) Kurulumu
+     */
+    initSpeechRecognition() {
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+        if (!SpeechRecognition) {
+            console.warn('⚠️ Bu tarayıcı Web Speech API desteklemiyor.');
+            if (this.elements.micBtn) {
+                this.elements.micBtn.title = 'Tarayıcınız ses tanımayı desteklemiyor.';
+                this.elements.micBtn.classList.add('opacity-50', 'cursor-not-allowed');
+            }
+            return;
+        }
+
+        this.recognition = new SpeechRecognition();
+        this.recognition.lang = 'tr-TR';
+        this.recognition.continuous = true;
+        this.recognition.interimResults = true;
+
+        let baseText = '';
+
+        this.recognition.onstart = () => {
+            this.isListening = true;
+            baseText = this.elements.inputText.value;
+            if (baseText.length > 0 && !baseText.endsWith(' ')) {
+                baseText += ' ';
+            }
+
+            // UI Güncellemeleri (Aktif Dinleme)
+            this.elements.micBtn.className = 'text-xs text-white transition-all flex items-center gap-1.5 bg-rose-600 hover:bg-rose-700 px-2.5 py-1 rounded-lg border border-rose-500 shadow-md shadow-rose-600/30';
+            this.elements.micIcon.className = 'fa-solid fa-microphone-slash animate-pulse text-white';
+            this.elements.micBtnText.textContent = 'Durdur';
+            this.elements.listeningStatus.classList.remove('hidden');
+        };
+
+        this.recognition.onresult = (event) => {
+            let interimTranscript = '';
+            let finalTranscript = '';
+
+            for (let i = event.resultIndex; i < event.results.length; ++i) {
+                if (event.results[i].isFinal) {
+                    finalTranscript += event.results[i][0].transcript;
+                } else {
+                    interimTranscript += event.results[i][0].transcript;
+                }
+            }
+
+            if (finalTranscript) {
+                baseText += finalTranscript + ' ';
+            }
+
+            this.elements.inputText.value = baseText + interimTranscript;
+            this.updateCharCounter();
+        };
+
+        this.recognition.onerror = (event) => {
+            console.error('Ses tanıma hatası:', event.error);
+            this.stopSpeechRecognition();
+        };
+
+        this.recognition.onend = () => {
+            this.stopSpeechRecognition();
+        };
+    }
+
+    /**
+     * Mikrofonu Başlat/Durdur Tetikleyicisi
+     */
+    toggleSpeechRecognition() {
+        if (!this.recognition) {
+            alert('Üzgünüz, tarayıcınız (veya mevcut ortamınız) Türkçe Sesli Girdi özelliğini desteklemiyor. Lütfen Chrome, Edge veya Safari kullanın.');
+            return;
+        }
+
+        if (this.isListening) {
+            this.recognition.stop();
+        } else {
+            try {
+                this.recognition.start();
+            } catch (e) {
+                console.warn('Ses tanıma zaten başlatılmış:', e);
+            }
+        }
+    }
+
+    stopSpeechRecognition() {
+        this.isListening = false;
+        if (this.elements.micBtn) {
+            this.elements.micBtn.className = 'text-xs text-slate-300 hover:text-white transition-all flex items-center gap-1.5 bg-surface-850 hover:bg-surface-800 px-2.5 py-1 rounded-lg border border-surface-700/60 shadow-sm';
+            this.elements.micIcon.className = 'fa-solid fa-microphone text-rose-400';
+            this.elements.micBtnText.textContent = 'Sesle Yaz';
+        }
+        if (this.elements.listeningStatus) {
+            this.elements.listeningStatus.classList.add('hidden');
+        }
     }
 
     updateCharCounter() {
@@ -159,8 +273,13 @@ class SentimentApp {
         const text = this.elements.inputText.value.trim();
 
         if (!text) {
-            this.triggerInputWarning('Lütfen önce bir metin girin.');
+            this.triggerInputWarning('Lütfen önce bir metin girin veya konuşun.');
             return;
+        }
+
+        // Eğer mikrofondan dinleniyorsa durdur
+        if (this.isListening && this.recognition) {
+            this.recognition.stop();
         }
 
         const startTime = performance.now();
@@ -173,11 +292,9 @@ class SentimentApp {
             this.showStatus('5 Seviyeli Derecelendirme & Psikolojik Spektrum Hesaplanıyor...', 100);
             this.elements.analyzeBtn.disabled = true;
 
-            // 1. Model Çıktısı (5-Star Sentiment Model)
             const modelOutput = await this.classifier(text);
             const durationMs = Math.round(performance.now() - startTime);
 
-            // 2. Psikolojik Duygu Spektrumu Hesabı (7 Emotion Channels)
             const emotionSpectrum = this.calculatePsychologicalEmotions(text, modelOutput[0]);
 
             this.hideStatus();
@@ -226,15 +343,10 @@ class SentimentApp {
         this.elements.statusContainer.classList.add('hidden');
     }
 
-    /**
-     * 7 Kanallı Psikolojik Duygu Spektrumu Hesaplayıcı
-     * (Neşe, Öfke, Üzüntü, Korku, Şaşkınlık, Tiksinme, Nötr)
-     */
     calculatePsychologicalEmotions(text, sentimentOutput) {
         const lowerText = text.toLowerCase();
         const { label, score } = sentimentOutput;
 
-        // Baz puanlar
         let joy = 5;
         let anger = 5;
         let sadness = 5;
@@ -243,7 +355,6 @@ class SentimentApp {
         let disgust = 5;
         let neutral = 10;
 
-        // Semantik Duygu Sözlükleri
         const joyWords = ['harika', 'muhteşem', 'beğendim', 'mutlu', 'güzel', 'süper', 'mükemmel', 'sevindim', 'kaliteli', 'tavsiye', 'hızlı', 'teşekkür', 'efsane', 'başkası', 'iyi', 'sevdim'];
         const angerWords = ['rezalet', 'berbat', 'kızgın', 'öfke', 'fiyasko', 'kötü', 'pişman', 'sakın', 'almayın', 'suratıma', 'şikayet', 'hırsız', 'dolandırıcı', 'saygısız', 'ilgisiz', 'kabul edilemez', 'iade'];
         const sadnessWords = ['üzgünüm', 'kırıldım', 'mağdur', 'yazık', 'bozuldu', 'kırık', 'ezik', 'gecikti', 'bekledim', 'hüsran', 'tatsız', 'maalesef', 'eksik', 'çaresiz'];
@@ -251,7 +362,6 @@ class SentimentApp {
         const surpriseWords = ['inanamıyorum', 'şaşırdım', 'beklemiyordum', 'vauv', 'şok', 'beklentimin', 'beklediğimden', 'hayret', 'nasıl'];
         const disgustWords = ['iğrenç', 'pis', 'kokuyor', 'berbat', 'tiksindim', 'çöp', 'berbatlık', 'kalitesiz', 'koku', 'rezillik'];
 
-        // Kelime sayımları
         joyWords.forEach(w => { if (lowerText.includes(w)) joy += 25; });
         angerWords.forEach(w => { if (lowerText.includes(w)) anger += 30; });
         sadnessWords.forEach(w => { if (lowerText.includes(w)) sadness += 25; });
@@ -259,7 +369,6 @@ class SentimentApp {
         surpriseWords.forEach(w => { if (lowerText.includes(w)) surprise += 25; });
         disgustWords.forEach(w => { if (lowerText.includes(w)) disgust += 25; });
 
-        // Ünlem ve Soru işareti etkileri
         if (lowerText.includes('!')) {
             anger += 10;
             joy += 10;
@@ -271,7 +380,6 @@ class SentimentApp {
             surprise += 10;
         }
 
-        // 5-Star Model etiket ağırlıklandırması
         if (label.includes('5 stars')) {
             joy += 50 * score;
             neutral = Math.max(2, neutral - 10);
@@ -299,19 +407,14 @@ class SentimentApp {
             { name: 'Nötr / Kararsız', key: 'neutral', icon: '😐', score: Math.round((neutral / total) * 100), color: 'bg-slate-500' },
         ];
 
-        // Sırala
         emotions.sort((a, b) => b.score - a.score);
         return emotions;
     }
 
-    /**
-     * Ekrana 5-Star ve Psikolojik Spektrumu Çizme
-     */
     renderResult(item) {
         const { label, score } = item.output;
         const confidencePct = (score * 100).toFixed(1);
 
-        // 5 Seviyeli Derecelendirme Haritası
         let starsCount = 3;
         let displayTitle = '3 / 5 Yıldız (Nötr)';
         let sublabel = 'Dengeli veya kararsız metin tonu';
@@ -362,7 +465,6 @@ class SentimentApp {
             meterGradient = 'from-rose-600 to-pink-500';
         }
 
-        // Header DOM Güncellemeleri
         this.elements.sentimentEmoji.textContent = emoji;
         this.elements.sentimentTitle.textContent = displayTitle;
         this.elements.sentimentSublabel.textContent = sublabel;
@@ -371,17 +473,14 @@ class SentimentApp {
         this.elements.timeValue.textContent = item.durationMs;
         this.elements.rawScoreLabel.textContent = `Etiket: ${label} (${score.toFixed(3)})`;
 
-        // Üst Çizgi Aksanı
         this.elements.resultAccentLine.className = `absolute top-0 left-0 right-0 h-1 ${accentColor}`;
 
-        // Meter Bar
         this.elements.meterFill.className = `h-full rounded bg-gradient-to-r ${meterGradient} transition-all duration-700 ease-out`;
         setTimeout(() => {
             const meterPct = Math.round((starsCount / 5) * 100);
             this.elements.meterFill.style.width = `${meterPct}%`;
         }, 50);
 
-        // Yıldız İkonları
         let starHTML = '';
         for (let i = 1; i <= 5; i++) {
             if (i <= starsCount) {
@@ -392,7 +491,6 @@ class SentimentApp {
         }
         this.elements.starContainer.innerHTML = starHTML;
 
-        // 2. Psikolojik Duygu Spektrumunu Çizme
         const emotions = item.emotions;
         const topEmotion = emotions[0];
         this.elements.primaryEmotionTag.textContent = `Baskın Duygu: ${topEmotion.icon} ${topEmotion.name} (%${topEmotion.score})`;
@@ -417,7 +515,6 @@ class SentimentApp {
 
         this.elements.emotionBarsContainer.innerHTML = emotionHTML;
 
-        // Görünürlük
         this.elements.emptyResultState.classList.add('hidden');
         this.elements.resultSection.classList.remove('hidden');
         this.elements.resultCard.classList.add('animate-fade-in-up');
