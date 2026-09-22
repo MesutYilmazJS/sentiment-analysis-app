@@ -4,6 +4,7 @@
  */
 
 import { pipeline, env } from 'https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2';
+import { analyzeLexiconEmotions } from './emotionLexicon.js';
 
 // Tarayıcı içi önbellekleme aktif
 env.allowLocalModels = false;
@@ -166,7 +167,6 @@ class SentimentApp {
                 baseText += ' ';
             }
 
-            // UI Güncellemeleri (Aktif Dinleme)
             this.elements.micBtn.className = 'text-xs text-white transition-all flex items-center gap-1.5 bg-rose-600 hover:bg-rose-700 px-2.5 py-1 rounded-lg border border-rose-500 shadow-md shadow-rose-600/30';
             this.elements.micIcon.className = 'fa-solid fa-microphone-slash animate-pulse text-white';
             this.elements.micBtnText.textContent = 'Durdur';
@@ -203,9 +203,6 @@ class SentimentApp {
         };
     }
 
-    /**
-     * Mikrofonu Başlat/Durdur Tetikleyicisi
-     */
     toggleSpeechRecognition() {
         if (!this.recognition) {
             alert('Üzgünüz, tarayıcınız (veya mevcut ortamınız) Türkçe Sesli Girdi özelliğini desteklemiyor. Lütfen Chrome, Edge veya Safari kullanın.');
@@ -277,7 +274,6 @@ class SentimentApp {
             return;
         }
 
-        // Eğer mikrofondan dinleniyorsa durdur
         if (this.isListening && this.recognition) {
             this.recognition.stop();
         }
@@ -295,6 +291,7 @@ class SentimentApp {
             const modelOutput = await this.classifier(text);
             const durationMs = Math.round(performance.now() - startTime);
 
+            // Gelişmiş Harici Semantik Sözlük ile Çift Katmanlı Hesaplama
             const emotionSpectrum = this.calculatePsychologicalEmotions(text, modelOutput[0]);
 
             this.hideStatus();
@@ -343,43 +340,37 @@ class SentimentApp {
         this.elements.statusContainer.classList.add('hidden');
     }
 
+    /**
+     * Harici emotionLexicon.js Sözlüğü ile Psikolojik Duygu Spektrumu Hesabı
+     */
     calculatePsychologicalEmotions(text, sentimentOutput) {
-        const lowerText = text.toLowerCase();
         const { label, score } = sentimentOutput;
+        const lowerText = text.toLowerCase();
 
-        let joy = 5;
-        let anger = 5;
-        let sadness = 5;
-        let fear = 5;
-        let surprise = 5;
-        let disgust = 5;
-        let neutral = 10;
+        // 1. Harici Semantik Duygu Sözlüğü Skoru
+        const lexiconScores = analyzeLexiconEmotions(text);
 
-        const joyWords = ['harika', 'muhteşem', 'beğendim', 'mutlu', 'güzel', 'süper', 'mükemmel', 'sevindim', 'kaliteli', 'tavsiye', 'hızlı', 'teşekkür', 'efsane', 'başkası', 'iyi', 'sevdim'];
-        const angerWords = ['rezalet', 'berbat', 'kızgın', 'öfke', 'fiyasko', 'kötü', 'pişman', 'sakın', 'almayın', 'suratıma', 'şikayet', 'hırsız', 'dolandırıcı', 'saygısız', 'ilgisiz', 'kabul edilemez', 'iade'];
-        const sadnessWords = ['üzgünüm', 'kırıldım', 'mağdur', 'yazık', 'bozuldu', 'kırık', 'ezik', 'gecikti', 'bekledim', 'hüsran', 'tatsız', 'maalesef', 'eksik', 'çaresiz'];
-        const fearWords = ['korkuyorum', 'endişe', 'şüphe', 'güvensiz', 'tehlike', 'riski', 'korkunç', 'acaba', 'zarar', 'patlayabilir', 'patladı', 'sahte'];
-        const surpriseWords = ['inanamıyorum', 'şaşırdım', 'beklemiyordum', 'vauv', 'şok', 'beklentimin', 'beklediğimden', 'hayret', 'nasıl'];
-        const disgustWords = ['iğrenç', 'pis', 'kokuyor', 'berbat', 'tiksindim', 'çöp', 'berbatlık', 'kalitesiz', 'koku', 'rezillik'];
+        let joy = 5 + lexiconScores.joy;
+        let anger = 5 + lexiconScores.anger;
+        let sadness = 5 + lexiconScores.sadness;
+        let fear = 5 + lexiconScores.fear;
+        let surprise = 5 + lexiconScores.surprise;
+        let disgust = 5 + lexiconScores.disgust;
+        let neutral = 10 + lexiconScores.neutral;
 
-        joyWords.forEach(w => { if (lowerText.includes(w)) joy += 25; });
-        angerWords.forEach(w => { if (lowerText.includes(w)) anger += 30; });
-        sadnessWords.forEach(w => { if (lowerText.includes(w)) sadness += 25; });
-        fearWords.forEach(w => { if (lowerText.includes(w)) fear += 25; });
-        surpriseWords.forEach(w => { if (lowerText.includes(w)) surprise += 25; });
-        disgustWords.forEach(w => { if (lowerText.includes(w)) disgust += 25; });
-
+        // 2. Noktalama İşaretleri ve Vurgu Etkisi
         if (lowerText.includes('!')) {
-            anger += 10;
+            anger += 12;
             joy += 10;
             surprise += 15;
         }
         if (lowerText.includes('?')) {
             fear += 10;
             neutral += 10;
-            surprise += 10;
+            surprise += 12;
         }
 
+        // 3. 5-Star Model Ağırlığı
         if (label.includes('5 stars')) {
             joy += 50 * score;
             neutral = Math.max(2, neutral - 10);
